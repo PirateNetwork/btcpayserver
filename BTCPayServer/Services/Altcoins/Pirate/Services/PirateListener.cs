@@ -70,6 +70,26 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Services
                     _logger.LogInformation($"{e.CryptoCode} just became unavailable");
                 }
             }));
+            // Periodic poll in case callbacks are missed
+            leases.Add(_eventAggregator.Subscribe<NewBlockEvent>(e => { }));
+            _ = Task.Run(async () =>
+            {
+                while (!_Cts.IsCancellationRequested)
+                {
+                    try
+                    {
+                        foreach (var item in _PirateLikeConfiguration.PirateLikeConfigurationItems.Keys)
+                        {
+                            await UpdateAnyPendingPirateLikePayment(item);
+                        }
+                    }
+                    catch (Exception ex) when (!_Cts.IsCancellationRequested)
+                    {
+                        _logger.LogError(ex, "Periodic Pirate poll failed");
+                    }
+                    await Task.Delay(TimeSpan.FromSeconds(10), _Cts.Token);
+                }
+            }, _Cts.Token);
             _ = WorkThroughQueue(_Cts.Token);
             return Task.CompletedTask;
         }
