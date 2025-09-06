@@ -144,7 +144,7 @@
                 <div class="line-items__item__value">-{{srvModel.btcPaid }} {{ srvModel.cryptoCode }}</div>
             </div>
             <div class="line-items__item line-items__item--total" v-show="parseFloat(srvModel.btcDue) > 0">
-                <div class="line-items__item__label">{{$t("Due")}}</div>
+                <div class="line-items__item__label">{{$t("Due_IncludesFee")}}</div>
                 <div class="line-items__item__value">{{srvModel.btcDue}} {{ srvModel.cryptoCode }}</div>
             </div>
         </div>
