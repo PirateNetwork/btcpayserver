@@ -52,7 +52,7 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Payments
 
             return new PirateLikeOnChainPaymentMethodDetails()
             {
-                NextNetworkFee = PirateMoney.Convert(1000),
+                NextNetworkFee = PirateMoney.Convert(10000),
                 AccountIndex = supportedPaymentMethod.AccountIndex,
                 AddressIndex = address.AddressIndex,
                 DepositAddress = address.Address,
