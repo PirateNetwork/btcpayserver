@@ -302,7 +302,12 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Services
             var paymentsToUpdate = new BlockingCollection<(PaymentEntity Payment, InvoiceEntity invoice)>();
 
             //group all destinations of the tx together and loop through the sets
-            foreach (var destination in transfer.Transfers.GroupBy(destination => destination.Address))
+            var transferItems = transfer.Transfers ??
+                                 (transfer.Transfer == null
+                                     ? System.Linq.Enumerable.Empty<GetTransferByTransactionIdResponse.TransferItem>()
+                                     : new[] { transfer.Transfer });
+
+            foreach (var destination in transferItems.GroupBy(destination => destination.Address))
             {
                 //find the invoice corresponding to this address, else skip
                 var address = destination.Key + "#" + paymentMethodId;
