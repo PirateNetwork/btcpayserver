@@ -23,11 +23,13 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Payments
     {
         private readonly BTCPayNetworkProvider _networkProvider;
         private readonly PirateRPCProvider _pirateRpcProvider;
+        private readonly PirateAddressPoolService _addressPoolService;
 
-        public PirateLikePaymentMethodHandler(BTCPayNetworkProvider networkProvider, PirateRPCProvider pirateRpcProvider)
+        public PirateLikePaymentMethodHandler(BTCPayNetworkProvider networkProvider, PirateRPCProvider pirateRpcProvider, PirateAddressPoolService addressPoolService)
         {
             _networkProvider = networkProvider;
             _pirateRpcProvider = pirateRpcProvider;
+            _addressPoolService = addressPoolService;
         }
         public override PaymentType PaymentType => PiratePaymentType.Instance;
 
@@ -48,7 +50,7 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Payments
             var invoice = paymentMethod.ParentEntity;
             if (!(preparePaymentObject is Prepare piratePrepare))
                 throw new ArgumentException();
-            var address = await piratePrepare.ReserveAddress(invoice.Id);
+            var address = await _addressPoolService.ReserveAddress(network.CryptoCode, supportedPaymentMethod.AccountIndex, invoice.Id);
 
             return new PirateLikeOnChainPaymentMethodDetails()
             {
@@ -65,17 +67,12 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Payments
             BTCPayNetworkBase network)
         {
 
-            var walletClient = _pirateRpcProvider.WalletRpcClients[supportedPaymentMethod.CryptoCode];
-            var daemonClient = _pirateRpcProvider.DaemonRpcClients[supportedPaymentMethod.CryptoCode];
-            return new Prepare()
-            {
-                ReserveAddress = s => walletClient.SendCommandAsync<CreateAddressRequest, CreateAddressResponse>("create_address", new CreateAddressRequest() { Label = $"btcpay invoice #{s}", AccountIndex = supportedPaymentMethod.AccountIndex })
-            };
+            return new Prepare();
         }
 
         class Prepare
         {
-            public Func<string, Task<CreateAddressResponse>> ReserveAddress;
+            // Intentionally empty; address allocation is handled by the address pool service
         }
 
         public override void PreparePaymentModel(PaymentModel model, InvoiceResponse invoiceResponse,

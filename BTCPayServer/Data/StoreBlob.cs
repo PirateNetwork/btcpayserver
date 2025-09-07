@@ -23,7 +23,7 @@ namespace BTCPayServer.Data
         
         public StoreBlob()
         {
-            InvoiceExpiration = TimeSpan.FromMinutes(15);
+            InvoiceExpiration = TimeSpan.FromMinutes(45);
             RefundBOLT11Expiration = TimeSpan.FromDays(30);
             MonitoringExpiration = TimeSpan.FromDays(1);
             PaymentTolerance = 0;

@@ -78,6 +78,19 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Services
                 {
                     try
                     {
+                        // Continuously ask walletd to scan, then update pending invoices
+                        foreach (var item in _PirateLikeConfiguration.PirateLikeConfigurationItems.Keys)
+                        {
+                            try
+                            {
+                                await _pirateRpcProvider.WalletRpcClients[item]
+                                    .SendCommandAsync<Empty, Empty>("request_scan", new Empty());
+                            }
+                            catch (Exception ex) when (!_Cts.IsCancellationRequested)
+                            {
+                                _logger.LogWarning(ex, "Pirate periodic request_scan failed");
+                            }
+                        }
                         foreach (var item in _PirateLikeConfiguration.PirateLikeConfigurationItems.Keys)
                         {
                             await UpdateAnyPendingPirateLikePayment(item);
@@ -90,6 +103,31 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Services
                     await Task.Delay(TimeSpan.FromSeconds(10), _Cts.Token);
                 }
             }, _Cts.Token);
+            // React immediately to newly created invoices by kicking an on-demand scan
+            leases.Add(_eventAggregator.Subscribe<InvoiceEvent>(inv =>
+            {
+                if (inv.Name != InvoiceEvent.Created)
+                    return;
+
+                foreach (var cryptoCode in _PirateLikeConfiguration.PirateLikeConfigurationItems.Keys)
+                {
+                    var invoiceId = inv.Invoice.Id;
+                    taskQueue.Enqueue(token => UpdatePaymentsForInvoice(cryptoCode, invoiceId));
+                    // Also trigger a walletd scan immediately
+                    taskQueue.Enqueue(async token =>
+                    {
+                        try
+                        {
+                            await _pirateRpcProvider.WalletRpcClients[cryptoCode]
+                                .SendCommandAsync<Empty, Empty>("request_scan", new Empty());
+                        }
+                        catch (Exception ex) when (!_Cts.IsCancellationRequested)
+                        {
+                            _logger.LogWarning(ex, "Pirate request_scan on invoice_created failed");
+                        }
+                    });
+                }
+            }));
             _ = WorkThroughQueue(_Cts.Token);
             return Task.CompletedTask;
         }
@@ -107,8 +145,7 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Services
                     }
                     catch (Exception e)
                     {
-
-                        _logger.LogError($"error with queue item", e);
+                        _logger.LogError(e, "error with queue item");
                     }
                 }
                 else
@@ -194,6 +231,12 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Services
                             tuple.Invoice))
                 ));
 
+            try
+            {
+                _logger.LogInformation("Pirate scan {Crypto}: invoices={Count} ids=[{Ids}]", cryptoCode, expandedInvoices.Count(), string.Join(",", expandedInvoices.Select(e => e.Invoice.Id)));
+            }
+            catch { }
+
             var existingPaymentData = expandedInvoices.SelectMany(tuple => tuple.ExistingPayments);
 
             var accountToAddressQuery = new Dictionary<long, List<long>>();
@@ -209,6 +252,13 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Services
                 addressIndexList.Add(expandedInvoice.PaymentMethodDetails.AddressIndex);
                 accountToAddressQuery.AddOrReplace(expandedInvoice.PaymentMethodDetails.AccountIndex, addressIndexList);
             }
+
+            try
+            {
+                foreach (var kv in accountToAddressQuery)
+                    _logger.LogInformation("Pirate scan {Crypto}: account={Account} subaddrs=[{Subs}]", cryptoCode, kv.Key, string.Join(",", kv.Value.Distinct()));
+            }
+            catch { }
 
             var tasks = accountToAddressQuery.ToDictionary(datas => datas.Key,
                 datas => pirateWalletRpcClient.SendCommandAsync<GetTransfersRequest, GetTransfersResponse>(
@@ -277,6 +327,28 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Services
             }
         }
 
+        private async Task UpdatePaymentsForInvoice(string cryptoCode, string invoiceId)
+        {
+            try
+            {
+                var invoice = await _invoiceRepository.GetInvoice(invoiceId);
+                if (invoice == null)
+                    return;
+
+                var network = _networkProvider.GetNetwork(cryptoCode);
+                var pm = invoice.GetPaymentMethod(network, PiratePaymentType.Instance);
+                var details = pm?.GetPaymentMethodDetails() as PirateLikeOnChainPaymentMethodDetails;
+                if (details?.Activated is true)
+                {
+                    await UpdatePaymentStates(cryptoCode, new[] { invoice });
+                }
+            }
+            catch (Exception ex) when (!_Cts.IsCancellationRequested)
+            {
+                _logger.LogError(ex, "Immediate Pirate scan for newly created invoice failed");
+            }
+        }
+
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
@@ -287,6 +359,16 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Services
 
         private async Task OnNewBlock(string cryptoCode)
         {
+            // Ask walletd to rescan and notify us on every block, then update local invoices
+            try
+            {
+                await _pirateRpcProvider.WalletRpcClients[cryptoCode]
+                    .SendCommandAsync<Empty, Empty>("request_scan", new Empty());
+            }
+            catch (Exception ex) when (!_Cts.IsCancellationRequested)
+            {
+                _logger.LogWarning(ex, "Pirate request_scan failed");
+            }
             await UpdateAnyPendingPirateLikePayment(cryptoCode);
             _eventAggregator.Publish(new NewBlockEvent() { CryptoCode = cryptoCode });
         }
@@ -294,10 +376,55 @@ namespace BTCPayServer.Services.Altcoins.Pirate.Services
         private async Task OnTransactionUpdated(string cryptoCode, string transactionHash)
         {
             var paymentMethodId = new PaymentMethodId(cryptoCode, PiratePaymentType.Instance);
-            var transfer = await _pirateRpcProvider.WalletRpcClients[cryptoCode]
-                .SendCommandAsync<GetTransferByTransactionIdRequest, GetTransferByTransactionIdResponse>(
-                    "get_transfer_by_txid",
-                    new GetTransferByTransactionIdRequest() { TransactionId = transactionHash });
+            GetTransferByTransactionIdResponse transfer = null;
+            try
+            {
+                // First attempt without specifying account index
+                transfer = await _pirateRpcProvider.WalletRpcClients[cryptoCode]
+                    .SendCommandAsync<GetTransferByTransactionIdRequest, GetTransferByTransactionIdResponse>(
+                        "get_transfer_by_txid",
+                        new GetTransferByTransactionIdRequest() { TransactionId = transactionHash });
+            }
+            catch (System.Net.Http.HttpRequestException)
+            {
+                // Walletd may only expose the tx under a specific account index.
+                try
+                {
+                    var accounts = await _pirateRpcProvider.WalletRpcClients[cryptoCode]
+                        .SendCommandAsync<Empty, GetAccountsResponse>("get_accounts", new Empty());
+                    foreach (var acc in accounts.SubaddressAccounts ?? Enumerable.Empty<SubaddressAccount>())
+                    {
+                        try
+                        {
+                            transfer = await _pirateRpcProvider.WalletRpcClients[cryptoCode]
+                                .SendCommandAsync<GetTransferByTransactionIdRequest, GetTransferByTransactionIdResponse>(
+                                    "get_transfer_by_txid",
+                                    new GetTransferByTransactionIdRequest()
+                                    {
+                                        TransactionId = transactionHash,
+                                        AccountIndex = acc.AccountIndex
+                                    });
+                            if (transfer != null)
+                                break;
+                        }
+                        catch (System.Net.Http.HttpRequestException)
+                        {
+                            // try next account
+                        }
+                    }
+                }
+                catch
+                {
+                    // ignore and fall back to rescan
+                }
+
+                if (transfer == null)
+                {
+                    // Fall back to pending invoice rescan (periodic poll will also pick up shortly)
+                    await UpdateAnyPendingPirateLikePayment(cryptoCode);
+                    return;
+                }
+            }
 
             var paymentsToUpdate = new BlockingCollection<(PaymentEntity Payment, InvoiceEntity invoice)>();
 
