@@ -14,6 +14,7 @@
   "Network Cost": "Network Cost",
   "Already Paid": "Already Paid",
   "Due": "Due",
+  "Due_IncludesFee": "Due (includes transaction fee)",
   "Scan": "Scan",
   "Copy": "Copy",
   "Conversion": "Conversion",

@@ -22,6 +22,7 @@ namespace BTCPayServer.Services.Altcoins.Pirate
             serviceCollection.AddSingleton<PirateRPCProvider>();
             serviceCollection.AddHostedService<PirateLikeSummaryUpdaterHostedService>();
             serviceCollection.AddHostedService<PirateListener>();
+            serviceCollection.AddSingleton<PirateAddressPoolService>();
             serviceCollection.AddSingleton<PirateLikePaymentMethodHandler>();
             serviceCollection.AddSingleton<IPaymentMethodHandler>(provider => provider.GetService<PirateLikePaymentMethodHandler>());
             serviceCollection.AddSingleton<IUIExtension>(new UIExtension("Pirate/StoreNavPirateExtension",  "store-nav"));

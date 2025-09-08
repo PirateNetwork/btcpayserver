@@ -13,8 +13,8 @@ namespace BTCPayServer
                 Divisibility = 8,
                 BlockExplorerLink =
                     NetworkType == ChainName.Mainnet
-                        ? "https://www.exploremonero.com/transaction/{0}" // TODO HHH: Replace with ARRR block explorer
-                        : "https://testnet.xmrchain.net/tx/{0}",
+                        ? "https://explorer.piratechain.com/tx/{0}"
+                        : "https://explorer.piratechain.com/tx/{0}", 
                 DefaultRateRules = new[]
                 {
                     "XMR_X = XMR_BTC * BTC_X",
