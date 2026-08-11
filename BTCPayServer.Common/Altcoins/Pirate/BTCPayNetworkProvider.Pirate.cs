@@ -17,8 +17,8 @@ namespace BTCPayServer
                         : "https://explorer.piratechain.com/tx/{0}", 
                 DefaultRateRules = new[]
                 {
-                    "XMR_X = XMR_BTC * BTC_X",
-                    "XMR_BTC = kraken(XMR_BTC)"
+                    "ARRR_X = ARRR_BTC * BTC_X",
+                    "ARRR_BTC = nonkyc_io(ARRR_BTC)"
                 },
                 CryptoImagePath = "/imlegacy/pirate.png",
                 UriScheme = "Pirate"
