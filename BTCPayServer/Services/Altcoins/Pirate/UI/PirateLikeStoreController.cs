@@ -96,7 +96,7 @@ namespace BTCPayServer.Services.Altcoins.Pirate.UI
             var fileAddress = Path.Combine(configurationItem.WalletDirectory, "wallet");
             var accounts = accountsResponse?.SubaddressAccounts?.Select(account =>
                 new SelectListItem(
-                    $"{account.AccountIndex} - {(string.IsNullOrEmpty(account.Label) ? "No label" : account.Label)}",
+                    $"{account.AccountIndex} - {(string.IsNullOrEmpty(account.Label) ? "No label" : account.Label)} ({FormatPoolName(account.Pool)})",
                     account.AccountIndex.ToString(CultureInfo.InvariantCulture)));
             return new PirateLikePaymentMethodViewModel()
             {
@@ -111,6 +111,13 @@ namespace BTCPayServer.Services.Altcoins.Pirate.UI
                     nameof(SelectListItem.Text))
             };
         }
+
+        private static string FormatPoolName(string pool) => pool switch
+        {
+            "ironwood" => "Ironwood",
+            "sapling" => "Sapling",
+            _ => "Sapling"
+        };
 
         [HttpGet("{cryptoCode}")]
         public async Task<IActionResult> GetStorePirateLikePaymentMethod(string cryptoCode)
@@ -143,7 +150,8 @@ namespace BTCPayServer.Services.Altcoins.Pirate.UI
                 {
                     var newAccount = await _PirateRpcProvider.WalletRpcClients[cryptoCode].SendCommandAsync<CreateAccountRequest, CreateAccountResponse>("create_account", new CreateAccountRequest()
                     {
-                        Label = viewModel.NewAccountLabel
+                        Label = viewModel.NewAccountLabel,
+                        Pool = viewModel.NewAccountPool
                     });
                     viewModel.AccountIndex = newAccount.AccountIndex;
                 }
@@ -242,6 +250,7 @@ namespace BTCPayServer.Services.Altcoins.Pirate.UI
 
                 vm.Enabled = viewModel.Enabled;
                 vm.NewAccountLabel = viewModel.NewAccountLabel;
+                vm.NewAccountPool = viewModel.NewAccountPool;
                 vm.AccountIndex = viewModel.AccountIndex;
                 return View(vm);
             }
@@ -295,6 +304,9 @@ namespace BTCPayServer.Services.Altcoins.Pirate.UI
             public PirateRPCProvider.PirateLikeSummary Summary { get; set; }
             public string CryptoCode { get; set; }
             public string NewAccountLabel { get; set; }
+
+            /// <summary>"sapling" or "ironwood"; which pool a newly created account will use.</summary>
+            public string NewAccountPool { get; set; } = "sapling";
             public long AccountIndex { get; set; }
             public bool Enabled { get; set; }
 

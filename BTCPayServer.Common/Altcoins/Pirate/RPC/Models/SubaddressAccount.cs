@@ -10,5 +10,8 @@ namespace BTCPayServer.Services.Altcoins.Pirate.RPC.Models
         [JsonProperty("label")] public string Label { get; set; }
         [JsonProperty("tag")] public string Tag { get; set; }
         [JsonProperty("unlocked_balance")] public decimal UnlockedBalance { get; set; }
+
+        /// <summary>"sapling" or "ironwood" - the pool this account was fixed to at creation time.</summary>
+        [JsonProperty("pool")] public string Pool { get; set; }
     }
 }

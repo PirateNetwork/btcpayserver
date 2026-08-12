@@ -80,8 +80,13 @@
                 <div class="form-group">
                     <div class="input-group my-3">
                         <input type="text" class="form-control" placeholder="New account label" asp-for="NewAccountLabel">
+                        <select asp-for="NewAccountPool" class="form-select" style="max-width: 10rem;">
+                            <option value="sapling">Sapling</option>
+                            <option value="ironwood">Ironwood</option>
+                        </select>
                         <button name="command" value="add-account" class="input-group-text btn btn-secondary" type="submit">Add account</button>
                     </div>
+                    <small class="form-text text-muted">The pool is fixed for an account when it's created and can't be changed afterwards.</small>
                 </div>
             }
 
