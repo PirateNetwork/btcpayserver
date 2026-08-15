@@ -96,7 +96,7 @@ namespace BTCPayServer.Services.Altcoins.Pirate.UI
             var fileAddress = Path.Combine(configurationItem.WalletDirectory, "wallet");
             var accounts = accountsResponse?.SubaddressAccounts?.Select(account =>
                 new SelectListItem(
-                    $"{account.AccountIndex} - {(string.IsNullOrEmpty(account.Label) ? "No label" : account.Label)} ({FormatPoolName(account.Pool)})",
+                    $"{account.AccountIndex} - {(string.IsNullOrEmpty(account.Label) ? "No label" : account.Label)} ({FormatPoolLabel(account.Pool, account.PoolPinned)})",
                     account.AccountIndex.ToString(CultureInfo.InvariantCulture)));
             return new PirateLikePaymentMethodViewModel()
             {
@@ -112,12 +112,19 @@ namespace BTCPayServer.Services.Altcoins.Pirate.UI
             };
         }
 
-        private static string FormatPoolName(string pool) => pool switch
+        private static string FormatPoolLabel(string pool, bool poolPinned)
         {
-            "ironwood" => "Ironwood",
-            "sapling" => "Sapling",
-            _ => "Sapling"
-        };
+            var name = pool switch
+            {
+                "ironwood" => "Ironwood",
+                "sapling" => "Sapling",
+                _ => "Sapling"
+            };
+            // An unpinned account keeps following the wallet's default pool
+            // automatically (e.g. it'll start using Ironwood on its own once
+            // that activates), so make clear this isn't a fixed choice.
+            return poolPinned ? name : $"{name}, auto";
+        }
 
         [HttpGet("{cryptoCode}")]
         public async Task<IActionResult> GetStorePirateLikePaymentMethod(string cryptoCode)
